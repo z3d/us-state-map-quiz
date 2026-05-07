@@ -164,8 +164,8 @@ button svg {
 .state-shape {
   vector-effect: non-scaling-stroke;
   fill: #fbfcf8;
-  stroke: #ffffff;
-  stroke-width: 1.05;
+  stroke: #8ea0b3;
+  stroke-width: 1;
   transition:
     fill 180ms ease,
     filter 180ms ease,
@@ -184,13 +184,15 @@ button svg {
   animation: state-pop 380ms cubic-bezier(0.2, 0.9, 0.2, 1.2);
 }
 
-.state-shape.correct-target,
+.state-shape.guessed-correct,
 .state-shape.filled {
   fill: #70c69b;
+  stroke: #27784d;
 }
 
-.state-shape.wrong-target {
-  fill: #ffb15f;
+.state-shape.guessed-wrong {
+  fill: #f07167;
+  stroke: #a53a34;
 }
 
 .state-label {
@@ -269,7 +271,7 @@ button svg {
 
 .panel-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin-top: auto;
 }

@@ -1,5 +1,5 @@
-import { CheckCircle2, Keyboard, MapPinned, RotateCcw, Shuffle, Timer, Trophy } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, Keyboard, MapPinned, RotateCcw, Timer, Trophy } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { geoAlbersUsa, geoPath } from 'd3-geo'
 import type { FeatureCollection, GeometryObject } from 'geojson'
 import './App.css'
@@ -7,6 +7,8 @@ import { findStateByAnswer, stateById, STATE_COUNT, US_STATES } from './stateDat
 
 type QuizMode = 'guess' | 'fill'
 type AnswerStatus = 'idle' | 'correct' | 'wrong' | 'repeat'
+type GuessResult = 'correct' | 'wrong'
+type GuessResultsById = Partial<Record<string, GuessResult>>
 
 const MAP_WIDTH = 975
 const MAP_HEIGHT = 610
@@ -24,9 +26,17 @@ type StateShape = {
 
 const stateIds = US_STATES.map((state) => state.id)
 
-function chooseRandomStateId(excludeId?: string) {
-  const candidates = stateIds.filter((id) => id !== excludeId)
-  return candidates[Math.floor(Math.random() * candidates.length)]
+function chooseRandomStateId(excludeId?: string, unavailableIds: string[] = []) {
+  const unavailableSet = new Set(unavailableIds)
+  const candidates = stateIds.filter((id) => id !== excludeId && !unavailableSet.has(id))
+  const fallbackCandidates = stateIds.filter((id) => !unavailableSet.has(id))
+  const pool = candidates.length > 0 ? candidates : fallbackCandidates
+
+  if (pool.length === 0) {
+    return excludeId ?? stateIds[0]
+  }
+
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 function formatTime(totalSeconds: number) {
@@ -75,14 +85,15 @@ function buildStateShapes() {
 }
 
 function App() {
+  const fillInputRef = useRef<HTMLInputElement>(null)
+  const guessInputRef = useRef<HTMLInputElement>(null)
   const stateShapes = useMemo(() => buildStateShapes(), [])
   const [mode, setMode] = useState<QuizMode>('guess')
   const [targetId, setTargetId] = useState(chooseRandomStateId)
   const [guessInput, setGuessInput] = useState('')
   const [guessStatus, setGuessStatus] = useState<AnswerStatus>('idle')
   const [guessMessage, setGuessMessage] = useState('Ready')
-  const [guessAttempts, setGuessAttempts] = useState(0)
-  const [guessCorrect, setGuessCorrect] = useState(0)
+  const [guessResultsById, setGuessResultsById] = useState<GuessResultsById>({})
   const [fillInput, setFillInput] = useState('')
   const [fillStatus, setFillStatus] = useState<AnswerStatus>('idle')
   const [fillMessage, setFillMessage] = useState('Ready')
@@ -90,11 +101,16 @@ function App() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   const targetState = stateById.get(targetId) ?? US_STATES[0]
+  const guessResultValues = Object.values(guessResultsById)
+  const guessTurns = guessResultValues.length
+  const guessCorrect = guessResultValues.filter((result) => result === 'correct').length
   const filledSet = useMemo(() => new Set(filledStateIds), [filledStateIds])
-  const isFillComplete = mode === 'fill' && filledStateIds.length === STATE_COUNT
+  const isGuessComplete = guessTurns === STATE_COUNT
+  const isFillComplete = filledStateIds.length === STATE_COUNT
+  const isCurrentModeComplete = mode === 'guess' ? isGuessComplete : isFillComplete
 
   useEffect(() => {
-    if (isFillComplete) {
+    if (isCurrentModeComplete) {
       return
     }
 
@@ -103,13 +119,33 @@ function App() {
     }, 1000)
 
     return () => window.clearInterval(timerId)
-  }, [isFillComplete, mode])
+  }, [isCurrentModeComplete, mode])
+
+  useEffect(() => {
+    if (isCurrentModeComplete) {
+      return
+    }
+
+    const input = mode === 'guess' ? guessInputRef.current : fillInputRef.current
+
+    if (!input) {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      input.focus()
+      input.select()
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [filledStateIds.length, isCurrentModeComplete, mode, targetId])
 
   function resetTimer() {
     setElapsedSeconds(0)
   }
 
-  function resetGuess(nextTargetId = chooseRandomStateId(targetId)) {
+  function resetGuessGame(nextTargetId = chooseRandomStateId(targetId)) {
+    setGuessResultsById({})
     setTargetId(nextTargetId)
     setGuessInput('')
     setGuessStatus('idle')
@@ -127,7 +163,7 @@ function App() {
     resetTimer()
 
     if (nextMode === 'guess') {
-      resetGuess(chooseRandomStateId(targetId))
+      resetGuessGame(chooseRandomStateId(targetId))
     } else {
       resetFill()
     }
@@ -136,6 +172,20 @@ function App() {
   function changeMode(nextMode: QuizMode) {
     setMode(nextMode)
     resetGame(nextMode)
+  }
+
+  function finishGuessTurn(result: GuessResult, message: string) {
+    const nextResults = { ...guessResultsById, [targetId]: result }
+    const nextTurnCount = Object.keys(nextResults).length
+
+    setGuessResultsById(nextResults)
+    setGuessInput('')
+    setGuessStatus(result)
+    setGuessMessage(nextTurnCount === STATE_COUNT ? `Finished: ${message}` : message)
+
+    if (nextTurnCount < STATE_COUNT) {
+      setTargetId(chooseRandomStateId(targetId, Object.keys(nextResults)))
+    }
   }
 
   function handleGuessSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -149,17 +199,12 @@ function App() {
       return
     }
 
-    setGuessAttempts((attempts) => attempts + 1)
-
     if (matchedState.id === targetId) {
-      setGuessStatus('correct')
-      setGuessMessage(matchedState.name)
-      setGuessCorrect((score) => score + 1)
+      finishGuessTurn('correct', `Correct: ${matchedState.name}`)
       return
     }
 
-    setGuessStatus('wrong')
-    setGuessMessage(trimmedAnswer)
+    finishGuessTurn('wrong', `${targetState.name}, not ${trimmedAnswer}`)
   }
 
   function handleFillSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -191,10 +236,6 @@ function App() {
     }
   }
 
-  function nextGuessState() {
-    resetGuess()
-  }
-
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -224,11 +265,13 @@ function App() {
           <>
             <div>
               <CheckCircle2 aria-hidden="true" />
-              <span>{guessCorrect} correct</span>
+              <span>
+                Score {guessCorrect}/{guessTurns}
+              </span>
             </div>
             <div>
               <Trophy aria-hidden="true" />
-              <span>{guessAttempts} guesses</span>
+              <span>{STATE_COUNT - guessTurns} left</span>
             </div>
           </>
         ) : (
@@ -252,14 +295,15 @@ function App() {
           <svg className={`us-map ${mode}`} role="img" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}>
             <title>United States state map</title>
             {stateShapes.map((shape) => {
-              const isTarget = mode === 'guess' && shape.id === targetId
+              const guessResult = mode === 'guess' ? guessResultsById[shape.id] : undefined
+              const isTarget = mode === 'guess' && shape.id === targetId && !guessResult && !isGuessComplete
               const isFilled = mode === 'fill' && filledSet.has(shape.id)
               const stateClassName = [
                 'state-shape',
                 isTarget ? 'target' : '',
+                guessResult === 'correct' ? 'guessed-correct' : '',
+                guessResult === 'wrong' ? 'guessed-wrong' : '',
                 isFilled ? 'filled' : '',
-                isTarget && guessStatus === 'correct' ? 'correct-target' : '',
-                isTarget && guessStatus === 'wrong' ? 'wrong-target' : '',
               ]
                 .filter(Boolean)
                 .join(' ')
@@ -300,7 +344,7 @@ function App() {
             <>
               <div className="prompt-block">
                 <p className="panel-kicker">Highlighted state</p>
-                <h2>{guessStatus === 'correct' ? targetState.name : 'Name it'}</h2>
+                <h2>{isGuessComplete ? 'Complete' : 'Name it'}</h2>
               </div>
 
               <form className="answer-form" onSubmit={handleGuessSubmit}>
@@ -311,24 +355,24 @@ function App() {
                   autoComplete="off"
                   autoFocus
                   className={guessStatus}
+                  disabled={isGuessComplete}
                   id="guess-input"
                   onChange={(event) => {
                     setGuessInput(event.target.value)
                     setGuessStatus('idle')
                   }}
                   placeholder="State name"
+                  ref={guessInputRef}
                   value={guessInput}
                 />
-                <button type="submit">Guess</button>
+                <button disabled={isGuessComplete} type="submit">
+                  Guess
+                </button>
               </form>
 
               <p className={`feedback ${guessStatus}`}>{guessMessage}</p>
 
               <div className="panel-actions">
-                <button type="button" onClick={nextGuessState}>
-                  <Shuffle aria-hidden="true" />
-                  Next
-                </button>
                 <button type="button" onClick={() => resetGame('guess')}>
                   <RotateCcw aria-hidden="true" />
                   Reset
@@ -356,6 +400,7 @@ function App() {
                     setFillStatus('idle')
                   }}
                   placeholder="State name"
+                  ref={fillInputRef}
                   value={fillInput}
                 />
                 <button disabled={isFillComplete} type="submit">

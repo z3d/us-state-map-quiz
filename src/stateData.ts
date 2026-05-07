@@ -83,6 +83,63 @@ export function normalizeAnswer(answer: string) {
     .toLocaleLowerCase('en-US')
 }
 
+function getAllowedMisspellings(answer: string) {
+  if (answer.length < 5) {
+    return 0
+  }
+
+  if (answer.length <= 7) {
+    return 1
+  }
+
+  if (answer.length <= 9) {
+    return 2
+  }
+
+  return Math.min(4, Math.ceil(answer.length * 0.28))
+}
+
+function getEditDistance(source: string, target: string) {
+  const distances = Array.from({ length: source.length + 1 }, (_, sourceIndex) =>
+    Array.from({ length: target.length + 1 }, (_, targetIndex) => {
+      if (sourceIndex === 0) {
+        return targetIndex
+      }
+
+      if (targetIndex === 0) {
+        return sourceIndex
+      }
+
+      return 0
+    }),
+  )
+
+  for (let sourceIndex = 1; sourceIndex <= source.length; sourceIndex += 1) {
+    for (let targetIndex = 1; targetIndex <= target.length; targetIndex += 1) {
+      const substitutionCost = source[sourceIndex - 1] === target[targetIndex - 1] ? 0 : 1
+      distances[sourceIndex][targetIndex] = Math.min(
+        distances[sourceIndex - 1][targetIndex] + 1,
+        distances[sourceIndex][targetIndex - 1] + 1,
+        distances[sourceIndex - 1][targetIndex - 1] + substitutionCost,
+      )
+
+      if (
+        sourceIndex > 1 &&
+        targetIndex > 1 &&
+        source[sourceIndex - 1] === target[targetIndex - 2] &&
+        source[sourceIndex - 2] === target[targetIndex - 1]
+      ) {
+        distances[sourceIndex][targetIndex] = Math.min(
+          distances[sourceIndex][targetIndex],
+          distances[sourceIndex - 2][targetIndex - 2] + 1,
+        )
+      }
+    }
+  }
+
+  return distances[source.length][target.length]
+}
+
 export const US_STATES: UsState[] = stateCollection.features
   .reduce<UsState[]>((states, stateFeature) => {
     const id = stateFeature.id === undefined ? '' : String(stateFeature.id)
@@ -114,6 +171,36 @@ const stateByAnswer = new Map(
   ]),
 )
 
+const stateNamesByAnswer = US_STATES.map((state) => ({
+  normalizedName: normalizeAnswer(state.name),
+  state,
+}))
+
 export function findStateByAnswer(answer: string) {
-  return stateByAnswer.get(normalizeAnswer(answer.trim()))
+  const normalizedAnswer = normalizeAnswer(answer.trim())
+  const exactMatch = stateByAnswer.get(normalizedAnswer)
+
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  const allowedMisspellings = getAllowedMisspellings(normalizedAnswer)
+
+  if (allowedMisspellings === 0) {
+    return undefined
+  }
+
+  const matches = stateNamesByAnswer
+    .map(({ normalizedName, state }) => ({
+      distance: getEditDistance(normalizedAnswer, normalizedName),
+      state,
+    }))
+    .filter((match) => match.distance <= allowedMisspellings)
+    .sort((a, b) => a.distance - b.distance)
+
+  if (matches.length === 0 || (matches[1] && matches[1].distance === matches[0].distance)) {
+    return undefined
+  }
+
+  return matches[0].state
 }
