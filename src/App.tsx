@@ -84,6 +84,10 @@ function getResultPhrase(score: number, total: number) {
 }
 
 function getProjectedAreaScale(bounds: SvgPathBounds, region: QuizRegion) {
+  if (region.id === 'africa') {
+    return 1
+  }
+
   if (region.unitLabel !== 'country or territory') {
     return 1
   }
@@ -138,10 +142,11 @@ function buildAreaShapes(region: QuizRegion) {
     features: region.areas.map((area) => area.feature).filter(Boolean),
   } as FeatureCollection<GeometryObject>
 
+  const projectionPadding = region.id === 'africa' ? 0 : 14
   const projection = createD3Projection(region).fitExtent(
     [
-      [14, 14],
-      [MAP_WIDTH - 14, MAP_HEIGHT - 14],
+      [projectionPadding, projectionPadding],
+      [MAP_WIDTH - projectionPadding, MAP_HEIGHT - projectionPadding],
     ],
     collection,
   )
@@ -584,6 +589,7 @@ function App() {
                 isReviewingMap ? 'reviewing' : ''
               }`}
               role="img"
+              preserveAspectRatio="xMidYMid meet"
               viewBox={region.viewBox}
             >
               <title>{region.mapLabel}</title>

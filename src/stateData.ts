@@ -575,6 +575,7 @@ const WORLD_ATLAS_NAME_ALIASES: Partial<Record<string, string[]>> = {
   do: ['Dominican Rep.'],
   eh: ['W. Sahara'],
   fo: ['Faeroe Is.'],
+  gq: ['Eq. Guinea'],
   kn: ['St. Kitts and Nevis'],
   ky: ['Cayman Is.'],
   mo: ['Macao'],
@@ -876,7 +877,7 @@ function createWorldAreas(locationIds: string[], options: { useProjectedFeatures
 }
 
 const ASIA_COUNTRIES = createWorldAreas(ASIA_COUNTRY_IDS, { useProjectedFeatures: true })
-const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS)
+const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS, { useProjectedFeatures: true })
 const NORTH_AMERICA_COUNTRIES = createWorldAreas(NORTH_AMERICA_COUNTRY_IDS, { useProjectedFeatures: true })
 const SOUTH_AMERICA_COUNTRIES = createWorldAreas(SOUTH_AMERICA_COUNTRY_IDS)
 const EUROPE_COUNTRIES = createWorldAreas(EUROPE_COUNTRY_IDS, { useProjectedFeatures: true })
@@ -969,10 +970,13 @@ const REGIONS_LIST: QuizRegion[] = [
     label: 'Africa',
     mapLabel: 'Africa countries and territories map',
     pluralNoun: 'countries and territories',
-    projection: 'svg',
+    projection: 'conicEqualArea',
+    projectionCenter: [0, 1],
+    projectionParallels: [0, 20],
+    projectionRotate: [-20, 0],
     shortLabel: 'AFR',
     unitLabel: 'country or territory',
-    viewBox: getSvgViewBox(AFRICA_COUNTRIES, worldMap.viewBox),
+    viewBox: '0 0 975 610',
   },
   {
     acceptsAbbreviations: true,
