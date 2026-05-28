@@ -200,8 +200,8 @@ type SvgPathBounds = {
 }
 
 const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
-const MIN_VISIBLE_WORLD_AREA_SIZE = 6
-const MAX_WORLD_AREA_SCALE = 140
+const MIN_VISIBLE_WORLD_AREA_SIZE = 14
+const MAX_WORLD_AREA_SCALE = 420
 
 function isSvgPathCommand(token: string) {
   return /^[a-df-zA-DF-Z]$/.test(token)
