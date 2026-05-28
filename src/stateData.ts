@@ -980,17 +980,66 @@ export const QUIZ_REGIONS = Object.fromEntries(REGIONS_LIST.map((region) => [reg
 
 export const REGION_OPTIONS = REGIONS_LIST.map(({ flag, id, label, shortLabel }) => ({ flag, id, label, shortLabel }))
 
+const MIN_SHORT_NAME_LENGTH = 3
+
+function getUniqueShortNameAliases(areas: QuizArea[]) {
+  const prefixOwners = new Map<string, Set<string>>()
+
+  areas.forEach((area) => {
+    const answerSources = [area.name, ...(area.aliases ?? [])]
+
+    answerSources.forEach((answer) => {
+      const normalizedAnswer = normalizeAnswer(answer)
+
+      for (let length = MIN_SHORT_NAME_LENGTH; length < normalizedAnswer.length; length += 1) {
+        const prefix = normalizedAnswer.slice(0, length)
+        const owners = prefixOwners.get(prefix) ?? new Set<string>()
+        owners.add(area.id)
+        prefixOwners.set(prefix, owners)
+      }
+    })
+  })
+
+  return new Map(
+    areas.map((area) => {
+      const aliases = new Set<string>()
+      const answerSources = [area.name, ...(area.aliases ?? [])]
+
+      answerSources.forEach((answer) => {
+        const normalizedAnswer = normalizeAnswer(answer)
+
+        for (let length = MIN_SHORT_NAME_LENGTH; length < normalizedAnswer.length; length += 1) {
+          const prefix = normalizedAnswer.slice(0, length)
+          const owners = prefixOwners.get(prefix)
+
+          if (owners?.size === 1 && owners.has(area.id)) {
+            aliases.add(prefix)
+          }
+        }
+      })
+
+      return [area.id, [...aliases]] as const
+    }),
+  )
+}
+
 const answerMapsByRegion = new Map(
-  REGIONS_LIST.map((region) => [
+  REGIONS_LIST.map((region) => {
+    const shortNameAliases =
+      region.unitLabel === 'country or territory' ? getUniqueShortNameAliases(region.areas) : new Map<string, string[]>()
+
+    return [
       region.id,
       new Map(
-      region.areas.flatMap((area) => [
-        [normalizeAnswer(area.name), area],
-        ...(area.aliases ?? []).map((alias) => [normalizeAnswer(alias), area] as const),
-        ...(region.acceptsAbbreviations ? [[normalizeAnswer(area.abbreviation), area] as const] : []),
-      ]),
-    ),
-  ]),
+        region.areas.flatMap((area) => [
+          [normalizeAnswer(area.name), area],
+          ...(area.aliases ?? []).map((alias) => [normalizeAnswer(alias), area] as const),
+          ...(shortNameAliases.get(area.id) ?? []).map((alias) => [alias, area] as const),
+          ...(region.acceptsAbbreviations ? [[normalizeAnswer(area.abbreviation), area] as const] : []),
+        ]),
+      ),
+    ] as const
+  }),
 )
 
 const areaNamesByRegion = new Map(
