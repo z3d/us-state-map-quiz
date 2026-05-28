@@ -213,7 +213,7 @@ export type SvgPathBounds = {
 const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
 const MIN_VISIBLE_WORLD_AREA_SIZE = 14
 const MAX_WORLD_AREA_SCALE = 420
-const MIN_VISIBLE_AFRICA_ISLAND_SIZE = 16
+const MIN_VISIBLE_AFRICA_ISLAND_SIZE = 14
 const MIN_AFRICA_ISLAND_SCALE = 1
 
 type WorldPathScaleRule = {
@@ -743,8 +743,8 @@ const AFRICA_SMALL_ISLAND_PATH_SCALE_RULES: Partial<Record<string, WorldPathScal
 )
 AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.km = {
   ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.km,
-  offsetX: -5,
-  offsetY: -4,
+  offsetX: 25,
+  offsetY: -6,
 }
 AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.mu = {
   ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.mu,
@@ -753,13 +753,17 @@ AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.mu = {
 }
 AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.re = {
   ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.re,
-  offsetX: -8,
+  offsetX: -6,
   offsetY: 7,
+}
+AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.st = {
+  ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.st,
+  offsetX: -6,
 }
 AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.yt = {
   ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.yt,
-  offsetX: 10,
-  offsetY: 7,
+  offsetX: 20,
+  offsetY: 8,
 }
 
 const NORTH_AMERICA_COUNTRY_IDS = [
