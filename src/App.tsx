@@ -1,15 +1,17 @@
 import { CheckCircle2, Eye, Keyboard, MapPinned, RotateCcw, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { geoAlbersUsa, geoPath } from 'd3-geo'
+import { geoAlbersUsa, geoConicConformal, geoConicEqualArea, geoPath } from 'd3-geo'
 import type { FeatureCollection, GeometryObject } from 'geojson'
 import './App.css'
 import {
   findAreaByAnswer,
   QUIZ_REGIONS,
   REGION_OPTIONS,
+  scaleSvgPath,
   type QuizArea,
   type QuizRegion,
   type RegionId,
+  type SvgPathBounds,
 } from './stateData'
 
 type QuizMode = 'guess' | 'fill'
@@ -19,6 +21,8 @@ type GuessResultsById = Partial<Record<string, GuessResult>>
 
 const MAP_WIDTH = 975
 const MAP_HEIGHT = 610
+const MIN_VISIBLE_PROJECTED_AREA_SIZE = 24
+const MAX_PROJECTED_AREA_SCALE = 640
 const MAP_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id !== 'nato')
 const MEMORY_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id === 'nato')
 
@@ -79,6 +83,38 @@ function getResultPhrase(score: number, total: number) {
   return 'Fresh start energy. Every miss just pointed to what to learn next.'
 }
 
+function getProjectedAreaScale(bounds: SvgPathBounds, region: QuizRegion) {
+  if (region.unitLabel !== 'country or territory') {
+    return 1
+  }
+
+  const maxDimension = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+
+  if (maxDimension >= MIN_VISIBLE_PROJECTED_AREA_SIZE || maxDimension <= 0) {
+    return 1
+  }
+
+  return Math.min(MAX_PROJECTED_AREA_SCALE, MIN_VISIBLE_PROJECTED_AREA_SIZE / maxDimension)
+}
+
+function createD3Projection(region: QuizRegion) {
+  if (region.projection === 'conicConformal') {
+    return geoConicConformal()
+      .parallels(region.projectionParallels ?? [30, 60])
+      .rotate(region.projectionRotate ?? [0, 0])
+      .center(region.projectionCenter ?? [0, 0])
+  }
+
+  if (region.projection === 'conicEqualArea') {
+    return geoConicEqualArea()
+      .parallels(region.projectionParallels ?? [30, 60])
+      .rotate(region.projectionRotate ?? [0, 0])
+      .center(region.projectionCenter ?? [0, 0])
+  }
+
+  return geoAlbersUsa()
+}
+
 function buildAreaShapes(region: QuizRegion) {
   if (region.projection === 'cards') {
     return []
@@ -102,14 +138,14 @@ function buildAreaShapes(region: QuizRegion) {
     features: region.areas.map((area) => area.feature).filter(Boolean),
   } as FeatureCollection<GeometryObject>
 
-  const projection = geoAlbersUsa().fitExtent(
+  const projection = createD3Projection(region).fitExtent(
     [
       [14, 14],
       [MAP_WIDTH - 14, MAP_HEIGHT - 14],
     ],
     collection,
   )
-  const path = geoPath(projection)
+  const path = geoPath(projection).pointRadius(12)
 
   return region.areas.map<AreaShape>((area) => {
     const areaFeature = area.feature
@@ -127,11 +163,19 @@ function buildAreaShapes(region: QuizRegion) {
       }
     }
 
-    const d = path(areaFeature) ?? ''
     const [min, max] = path.bounds(areaFeature)
     const [x, y] = path.centroid(areaFeature)
     const width = Math.max(1, max[0] - min[0])
     const height = Math.max(1, max[1] - min[1])
+    const d = path(areaFeature) ?? ''
+    const pathBounds = {
+      maxX: max[0],
+      maxY: max[1],
+      minX: min[0],
+      minY: min[1],
+    }
+    const areaScale = getProjectedAreaScale(pathBounds, region)
+    const displayD = areaScale > 1 ? scaleSvgPath(d, pathBounds, areaScale) : d
     const fullNameSize = Math.min(9.5, width / Math.max(1, area.name.length * 0.54), height * 0.42)
     const useFullName = fullNameSize >= 4.7 && width > 32 && height > 12
     const label = useFullName ? area.name : area.abbreviation
@@ -139,7 +183,7 @@ function buildAreaShapes(region: QuizRegion) {
 
     return {
       abbreviation: area.abbreviation,
-      d,
+      d: displayD,
       fontSize,
       id: area.id,
       label,

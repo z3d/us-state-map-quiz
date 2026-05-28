@@ -3,14 +3,19 @@ import { feature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 import australiaMap from '@svg-maps/australia'
 import worldMap from '@svg-maps/world'
+import worldAtlas from 'world-atlas/countries-50m.json'
 import statesAtlas from 'us-atlas/states-10m.json'
 
-type StateProperties = {
+type QuizAreaProperties = {
   name?: string
 }
 
 type StateTopology = Topology<{
-  states: GeometryCollection<StateProperties>
+  states: GeometryCollection<QuizAreaProperties>
+}>
+
+type WorldTopology = Topology<{
+  countries: GeometryCollection<QuizAreaProperties>
 }>
 
 export type RegionId = 'africa' | 'asia' | 'australia' | 'europe' | 'nato' | 'north-america' | 'south-america' | 'us'
@@ -18,7 +23,7 @@ export type RegionId = 'africa' | 'asia' | 'australia' | 'europe' | 'nato' | 'no
 export type QuizArea = {
   abbreviation: string
   aliases?: string[]
-  feature?: Feature<GeometryObject, StateProperties>
+  feature?: Feature<GeometryObject, QuizAreaProperties>
   id: string
   labelFontSize?: number
   labelX?: number
@@ -37,7 +42,10 @@ export type QuizRegion = {
   label: string
   mapLabel: string
   pluralNoun: string
-  projection: 'albersUsa' | 'cards' | 'svg'
+  projection: 'albersUsa' | 'cards' | 'conicConformal' | 'conicEqualArea' | 'svg'
+  projectionCenter?: [number, number]
+  projectionParallels?: [number, number]
+  projectionRotate?: [number, number]
   shortLabel: string
   unitLabel: string
   viewBox: string
@@ -98,7 +106,10 @@ const STATE_ABBREVIATIONS: Record<string, string> = {
 
 const EXCLUDED_IDS = new Set(['11', '60', '66', '69', '72', '78'])
 const topology = statesAtlas as unknown as StateTopology
-const stateCollection = feature<StateProperties>(topology, topology.objects.states) as FeatureCollection<GeometryObject, StateProperties>
+const stateCollection = feature<QuizAreaProperties>(topology, topology.objects.states) as FeatureCollection<
+  GeometryObject,
+  QuizAreaProperties
+>
 
 export function normalizeAnswer(answer: string) {
   return answer
@@ -192,7 +203,7 @@ type SvgMapLocation = {
   path: string
 }
 
-type SvgPathBounds = {
+export type SvgPathBounds = {
   maxX: number
   maxY: number
   minX: number
@@ -329,7 +340,7 @@ function getSvgViewBox(areas: QuizArea[], fallbackViewBox: string) {
   return [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].map(formatSvgNumber).join(' ')
 }
 
-function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
+export function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
   const tokens = path.match(SVG_PATH_TOKEN_PATTERN) ?? []
   const centerX = (bounds.minX + bounds.maxX) / 2
   const centerY = (bounds.minY + bounds.maxY) / 2
@@ -364,11 +375,11 @@ function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
       continue
     }
 
-    if (command !== 'm' && command !== 'M') {
+    if (command !== 'l' && command !== 'L' && command !== 'm' && command !== 'M') {
       return path
     }
 
-    let isMove = true
+    let isMove = command === 'm' || command === 'M'
 
     while (index + 1 < tokens.length && !isSvgPathCommand(tokens[index])) {
       const nextX = Number(tokens[index])
@@ -379,7 +390,7 @@ function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
         continue
       }
 
-      if (command === 'm') {
+      if (command === 'l' || command === 'm') {
         currentX += nextX
         currentY += nextY
       } else {
@@ -504,6 +515,16 @@ const AUSTRALIAN_STATES: QuizArea[] = [
 
 const WORLD_LOCATIONS = worldMap.locations as SvgMapLocation[]
 const worldLocationById = new Map(WORLD_LOCATIONS.map((location) => [location.id, location]))
+const worldTopology = worldAtlas as unknown as WorldTopology
+const worldCollection = feature<QuizAreaProperties>(
+  worldTopology,
+  worldTopology.objects.countries,
+) as FeatureCollection<GeometryObject, QuizAreaProperties>
+const worldFeatureByName = new Map(
+  worldCollection.features
+    .map((worldFeature) => [normalizeAnswer(worldFeature.properties?.name ?? ''), worldFeature] as const)
+    .filter(([name]) => Boolean(name)),
+)
 
 const COUNTRY_NAME_OVERRIDES: Partial<Record<string, string>> = {
   bn: 'Brunei',
@@ -541,6 +562,42 @@ const COUNTRY_ALIASES: Partial<Record<string, string[]>> = {
   tw: ['Republic of China'],
   us: ['USA', 'United States of America', 'America'],
   va: ['Holy See', 'Vatican'],
+}
+
+const WORLD_ATLAS_NAME_ALIASES: Partial<Record<string, string[]>> = {
+  ag: ['Antigua and Barb.'],
+  ax: ['Aland'],
+  ba: ['Bosnia and Herz.'],
+  bl: ['St-Barthelemy', 'St-Barthélemy'],
+  cd: ['Dem. Rep. Congo'],
+  cf: ['Central African Rep.'],
+  cg: ['Congo'],
+  do: ['Dominican Rep.'],
+  eh: ['W. Sahara'],
+  fo: ['Faeroe Is.'],
+  kn: ['St. Kitts and Nevis'],
+  ky: ['Cayman Is.'],
+  mo: ['Macao'],
+  mf: ['St-Martin'],
+  mk: ['Macedonia'],
+  pm: ['St. Pierre and Miquelon'],
+  ss: ['S. Sudan'],
+  st: ['São Tomé and Principe'],
+  sx: ['Sint Maarten'],
+  sz: ['eSwatini'],
+  tc: ['Turks and Caicos Is.'],
+  vc: ['St. Vin. and Gren.'],
+  vg: ['British Virgin Is.'],
+  vi: ['U.S. Virgin Is.'],
+  xk: ['Kosovo'],
+}
+
+const WORLD_POINT_FEATURES: Partial<Record<string, [number, number]>> = {
+  bq: [-68.25, 12.18],
+  gi: [-5.35, 36.14],
+  gp: [-61.55, 16.25],
+  mq: [-61.02, 14.64],
+  sj: [15.6, 78.2],
 }
 
 const ASIA_COUNTRY_IDS = [
@@ -786,7 +843,34 @@ function getCountryLabelFontSize(bounds: SvgPathBounds | undefined, abbreviation
   return Math.min(8.5, Math.max(2.8, Math.min(width / Math.max(1, abbreviation.length * 0.8), height * 0.56)))
 }
 
-function createWorldAreas(locationIds: string[]) {
+function createPointFeature(name: string, coordinates: [number, number]): Feature<GeometryObject, QuizAreaProperties> {
+  return {
+    geometry: {
+      coordinates,
+      type: 'Point',
+    },
+    properties: { name },
+    type: 'Feature',
+  }
+}
+
+function getWorldFeature(id: string, names: string[]) {
+  const atlasNames = [...names, ...(WORLD_ATLAS_NAME_ALIASES[id] ?? [])]
+
+  for (const atlasName of atlasNames) {
+    const atlasFeature = worldFeatureByName.get(normalizeAnswer(atlasName))
+
+    if (atlasFeature) {
+      return atlasFeature
+    }
+  }
+
+  const pointCoordinates = WORLD_POINT_FEATURES[id]
+
+  return pointCoordinates ? createPointFeature(names[0] ?? id.toUpperCase(), pointCoordinates) : undefined
+}
+
+function createWorldAreas(locationIds: string[], options: { useProjectedFeatures?: boolean } = {}) {
   return locationIds
     .map<QuizArea | undefined>((id) => {
       const location = worldLocationById.get(id)
@@ -800,26 +884,33 @@ function createWorldAreas(locationIds: string[]) {
       const pathScale = getWorldPathScale(bounds)
       const name = COUNTRY_NAME_OVERRIDES[id] ?? location.name
       const originalNameAliases = name === location.name ? [] : [location.name]
+      const aliases = [...originalNameAliases, ...(COUNTRY_ALIASES[id] ?? [])]
+      const areaFeature = options.useProjectedFeatures ? getWorldFeature(id, [name, location.name, ...aliases]) : undefined
 
       return {
         abbreviation,
-        aliases: [...originalNameAliases, ...(COUNTRY_ALIASES[id] ?? [])],
+        aliases,
+        feature: areaFeature,
         id,
         labelFontSize: getCountryLabelFontSize(bounds, abbreviation),
         labelX: bounds ? (bounds.minX + bounds.maxX) / 2 : undefined,
         labelY: bounds ? (bounds.minY + bounds.maxY) / 2 : undefined,
         name,
-        path: bounds && pathScale > 1 ? scaleSvgPath(location.path, bounds, pathScale) : location.path,
+        path: options.useProjectedFeatures
+          ? undefined
+          : bounds && pathScale > 1
+            ? scaleSvgPath(location.path, bounds, pathScale)
+            : location.path,
       }
     })
     .filter((area): area is QuizArea => Boolean(area))
 }
 
-const ASIA_COUNTRIES = createWorldAreas(ASIA_COUNTRY_IDS)
+const ASIA_COUNTRIES = createWorldAreas(ASIA_COUNTRY_IDS, { useProjectedFeatures: true })
 const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS)
-const NORTH_AMERICA_COUNTRIES = createWorldAreas(NORTH_AMERICA_COUNTRY_IDS)
+const NORTH_AMERICA_COUNTRIES = createWorldAreas(NORTH_AMERICA_COUNTRY_IDS, { useProjectedFeatures: true })
 const SOUTH_AMERICA_COUNTRIES = createWorldAreas(SOUTH_AMERICA_COUNTRY_IDS)
-const EUROPE_COUNTRIES = createWorldAreas(EUROPE_COUNTRY_IDS)
+const EUROPE_COUNTRIES = createWorldAreas(EUROPE_COUNTRY_IDS, { useProjectedFeatures: true })
 
 const NATO_PHONETIC_ALPHABET: QuizArea[] = [
   { abbreviation: 'A', aliases: ['Alpha'], id: 'a', name: 'Alfa' },
@@ -891,10 +982,13 @@ const REGIONS_LIST: QuizRegion[] = [
     label: 'Asia',
     mapLabel: 'Asia countries and territories map',
     pluralNoun: 'countries and territories',
-    projection: 'svg',
+    projection: 'conicEqualArea',
+    projectionCenter: [0, 36],
+    projectionParallels: [20, 55],
+    projectionRotate: [-95, 0],
     shortLabel: 'ASIA',
     unitLabel: 'country or territory',
-    viewBox: getSvgViewBox(ASIA_COUNTRIES, worldMap.viewBox),
+    viewBox: '0 0 975 610',
   },
   {
     acceptsAbbreviations: true,
@@ -921,10 +1015,13 @@ const REGIONS_LIST: QuizRegion[] = [
     label: 'North America',
     mapLabel: 'North America countries and territories map',
     pluralNoun: 'countries and territories',
-    projection: 'svg',
+    projection: 'conicEqualArea',
+    projectionCenter: [0, 46],
+    projectionParallels: [24, 58],
+    projectionRotate: [100, 0],
     shortLabel: 'N.AM',
     unitLabel: 'country or territory',
-    viewBox: getSvgViewBox(NORTH_AMERICA_COUNTRIES, worldMap.viewBox),
+    viewBox: '0 0 975 610',
   },
   {
     acceptsAbbreviations: true,
@@ -951,10 +1048,13 @@ const REGIONS_LIST: QuizRegion[] = [
     label: 'Europe',
     mapLabel: 'Europe countries and territories map',
     pluralNoun: 'countries and territories',
-    projection: 'svg',
+    projection: 'conicConformal',
+    projectionCenter: [0, 53],
+    projectionParallels: [35, 65],
+    projectionRotate: [-15, 0],
     shortLabel: 'EUR',
     unitLabel: 'country or territory',
-    viewBox: getSvgViewBox(EUROPE_COUNTRIES, worldMap.viewBox),
+    viewBox: '0 0 975 610',
   },
   {
     acceptsAbbreviations: false,
