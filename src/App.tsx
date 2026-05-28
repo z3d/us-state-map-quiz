@@ -185,7 +185,14 @@ function App() {
   const resultScore = mode === 'guess' ? guessCorrect : filledStateIds.length
   const resultPhrase = getResultPhrase(resultScore, areaCount)
   const isCardRegion = region.projection === 'cards'
-  const answerLabel = isCardRegion ? 'Code word' : region.id === 'australia' ? 'State or territory name' : 'State name'
+  const isContinentRegion = region.unitLabel === 'country or territory'
+  const answerLabel = isCardRegion
+    ? 'Code word'
+    : isContinentRegion
+      ? 'Country or territory name'
+      : region.id === 'australia'
+        ? 'State or territory name'
+        : 'State name'
   const hoveredAreaName = hoveredStateId ? areaById.get(hoveredStateId)?.name : undefined
   const resultKicker = mode === 'guess' ? 'Final score' : isCardRegion ? 'List complete' : 'Map complete'
   const reviewButtonLabel = isCardRegion ? 'Review List' : 'Show Map'
@@ -408,9 +415,11 @@ function App() {
                     type="button"
                     onClick={() => changeRegion(option.id)}
                   >
-                    <span className="region-flag" aria-hidden="true">
-                      {option.flag}
-                    </span>
+                    {option.flag ? (
+                      <span className="region-flag" aria-hidden="true">
+                        {option.flag}
+                      </span>
+                    ) : null}
                     <span>{option.shortLabel}</span>
                   </button>
                 ))}
@@ -527,7 +536,9 @@ function App() {
             </div>
           ) : (
             <svg
-              className={`quiz-map ${region.id}-map ${mode} ${isReviewingMap ? 'reviewing' : ''}`}
+              className={`quiz-map ${region.id}-map ${isContinentRegion ? 'continent-map' : ''} ${mode} ${
+                isReviewingMap ? 'reviewing' : ''
+              }`}
               role="img"
               viewBox={region.viewBox}
             >

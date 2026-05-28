@@ -20,6 +20,7 @@
 .title-block {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   min-width: 0;
 }
@@ -119,7 +120,9 @@ button svg {
 .training-switch {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
+  max-width: 100%;
   padding: 3px;
   border: 1px solid rgba(220, 228, 239, 0.86);
   border-radius: 8px;
@@ -149,6 +152,7 @@ button svg {
 
 .region-switch {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 2px;
 }
 
@@ -259,6 +263,10 @@ button svg {
   max-width: 760px;
 }
 
+.continent-map {
+  max-width: 1120px;
+}
+
 .memory-stage {
   padding: clamp(8px, 2vw, 24px);
 }
@@ -355,6 +363,10 @@ button svg {
   stroke-width: 0.78;
 }
 
+.continent-map .state-shape {
+  stroke-width: 0.76;
+}
+
 .state-shape.guessed-correct,
 .state-shape.filled {
   fill: #70c69b;
@@ -385,6 +397,10 @@ button svg {
   paint-order: stroke;
   stroke: rgba(255, 255, 255, 0.88);
   stroke-width: 3;
+}
+
+.continent-map .state-label {
+  stroke-width: 2;
 }
 
 .map-hover-label {
@@ -625,7 +641,12 @@ button svg {
   }
 
   .training-switch {
-    flex-shrink: 0;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .training-group {
+    flex-wrap: wrap;
   }
 
   .training-group-label {

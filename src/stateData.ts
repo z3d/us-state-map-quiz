@@ -2,6 +2,7 @@ import type { Feature, FeatureCollection, GeometryObject } from 'geojson'
 import { feature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 import australiaMap from '@svg-maps/australia'
+import worldMap from '@svg-maps/world'
 import statesAtlas from 'us-atlas/states-10m.json'
 
 type StateProperties = {
@@ -12,7 +13,7 @@ type StateTopology = Topology<{
   states: GeometryCollection<StateProperties>
 }>
 
-export type RegionId = 'australia' | 'nato' | 'us'
+export type RegionId = 'africa' | 'asia' | 'australia' | 'europe' | 'nato' | 'north-america' | 'south-america' | 'us'
 
 export type QuizArea = {
   abbreviation: string
@@ -191,6 +192,141 @@ type SvgMapLocation = {
   path: string
 }
 
+type SvgPathBounds = {
+  maxX: number
+  maxY: number
+  minX: number
+  minY: number
+}
+
+const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
+
+function isSvgPathCommand(token: string) {
+  return /^[a-df-zA-DF-Z]$/.test(token)
+}
+
+function formatSvgNumber(value: number) {
+  return String(Math.round(value * 1000) / 1000)
+}
+
+function getSvgPathBounds(path: string) {
+  const tokens = path.match(SVG_PATH_TOKEN_PATTERN) ?? []
+  let command = ''
+  let currentX = 0
+  let currentY = 0
+  let index = 0
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let startX = 0
+  let startY = 0
+
+  function includePoint(x: number, y: number) {
+    maxX = Math.max(maxX, x)
+    maxY = Math.max(maxY, y)
+    minX = Math.min(minX, x)
+    minY = Math.min(minY, y)
+  }
+
+  while (index < tokens.length) {
+    const token = tokens[index]
+
+    if (isSvgPathCommand(token)) {
+      command = token
+      index += 1
+
+      if (command === 'z' || command === 'Z') {
+        currentX = startX
+        currentY = startY
+      }
+
+      continue
+    }
+
+    if (command !== 'm' && command !== 'M') {
+      index += 1
+      continue
+    }
+
+    let isMove = true
+
+    while (index + 1 < tokens.length && !isSvgPathCommand(tokens[index])) {
+      const nextX = Number(tokens[index])
+      const nextY = Number(tokens[index + 1])
+      index += 2
+
+      if (Number.isNaN(nextX) || Number.isNaN(nextY)) {
+        continue
+      }
+
+      if (command === 'm') {
+        currentX += nextX
+        currentY += nextY
+      } else {
+        currentX = nextX
+        currentY = nextY
+      }
+
+      if (isMove) {
+        startX = currentX
+        startY = currentY
+        isMove = false
+      }
+
+      includePoint(currentX, currentY)
+    }
+  }
+
+  if (![maxX, maxY, minX, minY].every(Number.isFinite)) {
+    return undefined
+  }
+
+  return { maxX, maxY, minX, minY } satisfies SvgPathBounds
+}
+
+function combineSvgPathBounds(paths: string[]) {
+  const bounds = paths.map(getSvgPathBounds).filter((pathBounds): pathBounds is SvgPathBounds => Boolean(pathBounds))
+
+  if (bounds.length === 0) {
+    return undefined
+  }
+
+  return bounds.reduce<SvgPathBounds>(
+    (combined, pathBounds) => ({
+      maxX: Math.max(combined.maxX, pathBounds.maxX),
+      maxY: Math.max(combined.maxY, pathBounds.maxY),
+      minX: Math.min(combined.minX, pathBounds.minX),
+      minY: Math.min(combined.minY, pathBounds.minY),
+    }),
+    {
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+    },
+  )
+}
+
+function getSvgViewBox(areas: QuizArea[], fallbackViewBox: string) {
+  const bounds = combineSvgPathBounds(areas.map((area) => area.path ?? ''))
+
+  if (!bounds) {
+    return fallbackViewBox
+  }
+
+  const width = Math.max(1, bounds.maxX - bounds.minX)
+  const height = Math.max(1, bounds.maxY - bounds.minY)
+  const paddingX = Math.min(60, Math.max(8, width * 0.04))
+  const paddingY = Math.min(60, Math.max(8, height * 0.04))
+  const viewBoxX = bounds.minX - paddingX
+  const viewBoxY = bounds.minY - paddingY
+  const viewBoxWidth = width + paddingX * 2
+  const viewBoxHeight = height + paddingY * 2
+
+  return [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].map(formatSvgNumber).join(' ')
+}
+
 const AUSTRALIA_LOCATIONS = australiaMap.locations as SvgMapLocation[]
 const australiaLocationById = new Map(AUSTRALIA_LOCATIONS.map((location) => [location.id, location]))
 
@@ -276,6 +412,320 @@ const AUSTRALIAN_STATES: QuizArea[] = [
   },
 ]
 
+const WORLD_LOCATIONS = worldMap.locations as SvgMapLocation[]
+const worldLocationById = new Map(WORLD_LOCATIONS.map((location) => [location.id, location]))
+
+const COUNTRY_NAME_OVERRIDES: Partial<Record<string, string>> = {
+  bn: 'Brunei',
+  bq: 'Caribbean Netherlands',
+  ci: 'Ivory Coast',
+  cv: 'Cape Verde',
+  cz: 'Czechia',
+  la: 'Laos',
+  mk: 'North Macedonia',
+  ps: 'Palestine',
+  sx: 'Sint Maarten',
+  sz: 'Eswatini',
+}
+
+const COUNTRY_ALIASES: Partial<Record<string, string[]>> = {
+  ae: ['UAE'],
+  bn: ['Brunei Darussalam'],
+  bq: ['Bonaire, Saint Eustatius and Saba', 'Bonaire, Sint Eustatius and Saba'],
+  ci: ["Cote d'Ivoire", 'Cote d Ivoire'],
+  cv: ['Cabo Verde'],
+  cz: ['Czech Republic'],
+  gb: ['UK', 'Britain', 'Great Britain'],
+  la: ["Lao People's Democratic Republic"],
+  mk: ['Macedonia'],
+  mm: ['Burma'],
+  ps: ['Palestinian Territories'],
+  ru: ['Russian Federation'],
+  sz: ['Swaziland'],
+  tl: ['East Timor'],
+  tr: ['Turkiye'],
+  tw: ['Republic of China'],
+  us: ['USA', 'United States of America', 'America'],
+  va: ['Holy See', 'Vatican'],
+}
+
+const ASIA_COUNTRY_IDS = [
+  'ae',
+  'af',
+  'am',
+  'az',
+  'bd',
+  'bh',
+  'bn',
+  'bt',
+  'cn',
+  'cy',
+  'ge',
+  'hk',
+  'id',
+  'il',
+  'in',
+  'iq',
+  'ir',
+  'jo',
+  'jp',
+  'kg',
+  'kh',
+  'kp',
+  'kr',
+  'kw',
+  'kz',
+  'la',
+  'lb',
+  'lk',
+  'mm',
+  'mn',
+  'mo',
+  'mv',
+  'my',
+  'np',
+  'om',
+  'ph',
+  'pk',
+  'ps',
+  'qa',
+  'ru',
+  'sa',
+  'sg',
+  'sy',
+  'th',
+  'tj',
+  'tl',
+  'tm',
+  'tr',
+  'tw',
+  'uz',
+  'vn',
+  'ye',
+]
+
+const AFRICA_COUNTRY_IDS = [
+  'ao',
+  'bf',
+  'bi',
+  'bj',
+  'bw',
+  'cd',
+  'cf',
+  'cg',
+  'ci',
+  'cm',
+  'cv',
+  'dj',
+  'dz',
+  'eg',
+  'eh',
+  'er',
+  'et',
+  'ga',
+  'gh',
+  'gm',
+  'gn',
+  'gq',
+  'gw',
+  'ke',
+  'km',
+  'lr',
+  'ls',
+  'ly',
+  'ma',
+  'mg',
+  'ml',
+  'mr',
+  'mu',
+  'mw',
+  'mz',
+  'na',
+  'ne',
+  'ng',
+  're',
+  'rw',
+  'sc',
+  'sd',
+  'sh',
+  'sl',
+  'sn',
+  'so',
+  'ss',
+  'st',
+  'sz',
+  'td',
+  'tg',
+  'tn',
+  'tz',
+  'ug',
+  'yt',
+  'za',
+  'zm',
+  'zw',
+]
+
+const NORTH_AMERICA_COUNTRY_IDS = [
+  'ag',
+  'ai',
+  'aw',
+  'bb',
+  'bl',
+  'bm',
+  'bq',
+  'bs',
+  'bz',
+  'ca',
+  'cr',
+  'cu',
+  'cw',
+  'dm',
+  'do',
+  'gd',
+  'gl',
+  'gp',
+  'gt',
+  'hn',
+  'ht',
+  'jm',
+  'kn',
+  'ky',
+  'lc',
+  'mf',
+  'mq',
+  'ms',
+  'mx',
+  'ni',
+  'pa',
+  'pm',
+  'pr',
+  'sv',
+  'sx',
+  'tc',
+  'tt',
+  'us',
+  'vc',
+  'vg',
+  'vi',
+]
+
+const SOUTH_AMERICA_COUNTRY_IDS = [
+  'ar',
+  'bo',
+  'br',
+  'cl',
+  'co',
+  'ec',
+  'fk',
+  'gf',
+  'gs',
+  'gy',
+  'pe',
+  'py',
+  'sr',
+  'uy',
+  've',
+]
+
+const EUROPE_COUNTRY_IDS = [
+  'ad',
+  'al',
+  'at',
+  'ax',
+  'ba',
+  'be',
+  'bg',
+  'by',
+  'ch',
+  'cz',
+  'de',
+  'dk',
+  'ee',
+  'es',
+  'fi',
+  'fo',
+  'fr',
+  'gb',
+  'gg',
+  'gi',
+  'gr',
+  'hr',
+  'hu',
+  'ie',
+  'im',
+  'is',
+  'it',
+  'je',
+  'li',
+  'lt',
+  'lu',
+  'lv',
+  'mc',
+  'md',
+  'me',
+  'mk',
+  'mt',
+  'nl',
+  'no',
+  'pl',
+  'pt',
+  'ro',
+  'rs',
+  'se',
+  'si',
+  'sj',
+  'sk',
+  'sm',
+  'ua',
+  'va',
+  'xk',
+]
+
+function getCountryLabelFontSize(bounds: SvgPathBounds | undefined, abbreviation: string) {
+  if (!bounds) {
+    return 5
+  }
+
+  const width = Math.max(1, bounds.maxX - bounds.minX)
+  const height = Math.max(1, bounds.maxY - bounds.minY)
+
+  return Math.min(8.5, Math.max(2.8, Math.min(width / Math.max(1, abbreviation.length * 0.8), height * 0.56)))
+}
+
+function createWorldAreas(locationIds: string[]) {
+  return locationIds
+    .map<QuizArea | undefined>((id) => {
+      const location = worldLocationById.get(id)
+
+      if (!location) {
+        return undefined
+      }
+
+      const abbreviation = id.toUpperCase()
+      const bounds = getSvgPathBounds(location.path)
+      const name = COUNTRY_NAME_OVERRIDES[id] ?? location.name
+      const originalNameAliases = name === location.name ? [] : [location.name]
+
+      return {
+        abbreviation,
+        aliases: [...originalNameAliases, ...(COUNTRY_ALIASES[id] ?? [])],
+        id,
+        labelFontSize: getCountryLabelFontSize(bounds, abbreviation),
+        labelX: bounds ? (bounds.minX + bounds.maxX) / 2 : undefined,
+        labelY: bounds ? (bounds.minY + bounds.maxY) / 2 : undefined,
+        name,
+        path: location.path,
+      }
+    })
+    .filter((area): area is QuizArea => Boolean(area))
+}
+
+const ASIA_COUNTRIES = createWorldAreas(ASIA_COUNTRY_IDS)
+const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS)
+const NORTH_AMERICA_COUNTRIES = createWorldAreas(NORTH_AMERICA_COUNTRY_IDS)
+const SOUTH_AMERICA_COUNTRIES = createWorldAreas(SOUTH_AMERICA_COUNTRY_IDS)
+const EUROPE_COUNTRIES = createWorldAreas(EUROPE_COUNTRY_IDS)
+
 const NATO_PHONETIC_ALPHABET: QuizArea[] = [
   { abbreviation: 'A', aliases: ['Alpha'], id: 'a', name: 'Alfa' },
   { abbreviation: 'B', id: 'b', name: 'Bravo' },
@@ -335,6 +785,81 @@ const REGIONS_LIST: QuizRegion[] = [
     shortLabel: 'AUS',
     unitLabel: 'state or territory',
     viewBox: australiaMap.viewBox,
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'country or territory',
+    areas: ASIA_COUNTRIES,
+    eyebrow: 'Asia countries and territories',
+    flag: '',
+    id: 'asia',
+    label: 'Asia',
+    mapLabel: 'Asia countries and territories map',
+    pluralNoun: 'countries and territories',
+    projection: 'svg',
+    shortLabel: 'ASIA',
+    unitLabel: 'country or territory',
+    viewBox: getSvgViewBox(ASIA_COUNTRIES, worldMap.viewBox),
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'country or territory',
+    areas: AFRICA_COUNTRIES,
+    eyebrow: 'Africa countries and territories',
+    flag: '',
+    id: 'africa',
+    label: 'Africa',
+    mapLabel: 'Africa countries and territories map',
+    pluralNoun: 'countries and territories',
+    projection: 'svg',
+    shortLabel: 'AFR',
+    unitLabel: 'country or territory',
+    viewBox: getSvgViewBox(AFRICA_COUNTRIES, worldMap.viewBox),
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'country or territory',
+    areas: NORTH_AMERICA_COUNTRIES,
+    eyebrow: 'North America countries and territories',
+    flag: '',
+    id: 'north-america',
+    label: 'North America',
+    mapLabel: 'North America countries and territories map',
+    pluralNoun: 'countries and territories',
+    projection: 'svg',
+    shortLabel: 'N.AM',
+    unitLabel: 'country or territory',
+    viewBox: getSvgViewBox(NORTH_AMERICA_COUNTRIES, worldMap.viewBox),
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'country or territory',
+    areas: SOUTH_AMERICA_COUNTRIES,
+    eyebrow: 'South America countries and territories',
+    flag: '',
+    id: 'south-america',
+    label: 'South America',
+    mapLabel: 'South America countries and territories map',
+    pluralNoun: 'countries and territories',
+    projection: 'svg',
+    shortLabel: 'S.AM',
+    unitLabel: 'country or territory',
+    viewBox: getSvgViewBox(SOUTH_AMERICA_COUNTRIES, worldMap.viewBox),
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'country or territory',
+    areas: EUROPE_COUNTRIES,
+    eyebrow: 'Europe countries and territories',
+    flag: '',
+    id: 'europe',
+    label: 'Europe',
+    mapLabel: 'Europe countries and territories map',
+    pluralNoun: 'countries and territories',
+    projection: 'svg',
+    shortLabel: 'EUR',
+    unitLabel: 'country or territory',
+    viewBox: getSvgViewBox(EUROPE_COUNTRIES, worldMap.viewBox),
   },
   {
     acceptsAbbreviations: false,
