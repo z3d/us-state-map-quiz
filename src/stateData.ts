@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection, GeometryObject } from 'geojson'
 import { feature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
+import australiaMap from '@svg-maps/australia'
 import statesAtlas from 'us-atlas/states-10m.json'
 
 type StateProperties = {
@@ -11,11 +12,34 @@ type StateTopology = Topology<{
   states: GeometryCollection<StateProperties>
 }>
 
-export type UsState = {
+export type RegionId = 'australia' | 'nato' | 'us'
+
+export type QuizArea = {
   abbreviation: string
-  feature: Feature<GeometryObject, StateProperties>
+  aliases?: string[]
+  feature?: Feature<GeometryObject, StateProperties>
   id: string
+  labelFontSize?: number
+  labelX?: number
+  labelY?: number
   name: string
+  path?: string
+}
+
+export type QuizRegion = {
+  answerNoun: string
+  areas: QuizArea[]
+  acceptsAbbreviations: boolean
+  eyebrow: string
+  flag: string
+  id: RegionId
+  label: string
+  mapLabel: string
+  pluralNoun: string
+  projection: 'albersUsa' | 'cards' | 'svg'
+  shortLabel: string
+  unitLabel: string
+  viewBox: string
 }
 
 const STATE_ABBREVIATIONS: Record<string, string> = {
@@ -140,8 +164,8 @@ function getEditDistance(source: string, target: string) {
   return distances[source.length][target.length]
 }
 
-export const US_STATES: UsState[] = stateCollection.features
-  .reduce<UsState[]>((states, stateFeature) => {
+const US_STATES: QuizArea[] = stateCollection.features
+  .reduce<QuizArea[]>((states, stateFeature) => {
     const id = stateFeature.id === undefined ? '' : String(stateFeature.id)
     const name = stateFeature.properties?.name ?? ''
     const abbreviation = STATE_ABBREVIATIONS[name]
@@ -161,24 +185,207 @@ export const US_STATES: UsState[] = stateCollection.features
   }, [])
   .sort((a, b) => a.name.localeCompare(b.name))
 
-export const STATE_COUNT = US_STATES.length
-export const stateById = new Map(US_STATES.map((state) => [state.id, state]))
+type SvgMapLocation = {
+  id: string
+  name: string
+  path: string
+}
 
-const stateByAnswer = new Map(
-  US_STATES.flatMap((state) => [
-    [normalizeAnswer(state.name), state],
-    [normalizeAnswer(state.abbreviation), state],
+const AUSTRALIA_LOCATIONS = australiaMap.locations as SvgMapLocation[]
+const australiaLocationById = new Map(AUSTRALIA_LOCATIONS.map((location) => [location.id, location]))
+
+function getAustraliaPath(locationIds: string[]) {
+  return locationIds
+    .map((id) => australiaLocationById.get(id)?.path)
+    .filter((path): path is string => Boolean(path))
+    .join(' ')
+}
+
+const AUSTRALIAN_STATES: QuizArea[] = [
+  {
+    abbreviation: 'ACT',
+    id: 'act',
+    labelFontSize: 3.5,
+    labelX: 246,
+    labelY: 188,
+    name: 'Australian Capital Territory',
+    path: getAustraliaPath(['act']),
+  },
+  {
+    abbreviation: 'NSW',
+    id: 'nsw',
+    labelFontSize: 7,
+    labelX: 230,
+    labelY: 162,
+    name: 'New South Wales',
+    path: getAustraliaPath(['nsw']),
+  },
+  {
+    abbreviation: 'NT',
+    id: 'nt',
+    labelFontSize: 8,
+    labelX: 143,
+    labelY: 72,
+    name: 'Northern Territory',
+    path: getAustraliaPath(['nt-mainland', 'nt-groote-eylandt', 'nt-melville-island']),
+  },
+  {
+    abbreviation: 'QLD',
+    id: 'qld',
+    labelFontSize: 8,
+    labelX: 225,
+    labelY: 78,
+    name: 'Queensland',
+    path: getAustraliaPath(['qld-mainland', 'qld-fraser-island', 'qld-mornington-island']),
+  },
+  {
+    abbreviation: 'SA',
+    id: 'sa',
+    labelFontSize: 8,
+    labelX: 154,
+    labelY: 152,
+    name: 'South Australia',
+    path: getAustraliaPath(['sa-mainland', 'sa-kangaroo-island']),
+  },
+  {
+    abbreviation: 'TAS',
+    id: 'tas',
+    labelFontSize: 6,
+    labelX: 232,
+    labelY: 244,
+    name: 'Tasmania',
+    path: getAustraliaPath(['tas-mainland', 'tas-cape-barren', 'tas-flinders-island', 'tas-king-currie-island']),
+  },
+  {
+    abbreviation: 'VIC',
+    id: 'vic',
+    labelFontSize: 6,
+    labelX: 220,
+    labelY: 204,
+    name: 'Victoria',
+    path: getAustraliaPath(['vic']),
+  },
+  {
+    abbreviation: 'WA',
+    id: 'wa',
+    labelFontSize: 8,
+    labelX: 76,
+    labelY: 116,
+    name: 'Western Australia',
+    path: getAustraliaPath(['wa']),
+  },
+]
+
+const NATO_PHONETIC_ALPHABET: QuizArea[] = [
+  { abbreviation: 'A', aliases: ['Alpha'], id: 'a', name: 'Alfa' },
+  { abbreviation: 'B', id: 'b', name: 'Bravo' },
+  { abbreviation: 'C', id: 'c', name: 'Charlie' },
+  { abbreviation: 'D', id: 'd', name: 'Delta' },
+  { abbreviation: 'E', id: 'e', name: 'Echo' },
+  { abbreviation: 'F', id: 'f', name: 'Foxtrot' },
+  { abbreviation: 'G', id: 'g', name: 'Golf' },
+  { abbreviation: 'H', id: 'h', name: 'Hotel' },
+  { abbreviation: 'I', id: 'i', name: 'India' },
+  { abbreviation: 'J', aliases: ['Juliet'], id: 'j', name: 'Juliett' },
+  { abbreviation: 'K', id: 'k', name: 'Kilo' },
+  { abbreviation: 'L', id: 'l', name: 'Lima' },
+  { abbreviation: 'M', id: 'm', name: 'Mike' },
+  { abbreviation: 'N', id: 'n', name: 'November' },
+  { abbreviation: 'O', id: 'o', name: 'Oscar' },
+  { abbreviation: 'P', id: 'p', name: 'Papa' },
+  { abbreviation: 'Q', id: 'q', name: 'Quebec' },
+  { abbreviation: 'R', id: 'r', name: 'Romeo' },
+  { abbreviation: 'S', id: 's', name: 'Sierra' },
+  { abbreviation: 'T', id: 't', name: 'Tango' },
+  { abbreviation: 'U', id: 'u', name: 'Uniform' },
+  { abbreviation: 'V', id: 'v', name: 'Victor' },
+  { abbreviation: 'W', id: 'w', name: 'Whiskey' },
+  { abbreviation: 'X', aliases: ['Xray', 'X Ray'], id: 'x', name: 'X-ray' },
+  { abbreviation: 'Y', id: 'y', name: 'Yankee' },
+  { abbreviation: 'Z', id: 'z', name: 'Zulu' },
+]
+
+const REGIONS_LIST: QuizRegion[] = [
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'state',
+    areas: US_STATES,
+    eyebrow: 'US states',
+    flag: '🇺🇸',
+    id: 'us',
+    label: 'United States',
+    mapLabel: 'United States state map',
+    pluralNoun: 'states',
+    projection: 'albersUsa',
+    shortLabel: 'USA',
+    unitLabel: 'state',
+    viewBox: '0 0 975 610',
+  },
+  {
+    acceptsAbbreviations: true,
+    answerNoun: 'state or territory',
+    areas: AUSTRALIAN_STATES,
+    eyebrow: 'Australian states and territories',
+    flag: '🇦🇺',
+    id: 'australia',
+    label: 'Australia',
+    mapLabel: 'Australia state and territory map',
+    pluralNoun: 'states and territories',
+    projection: 'svg',
+    shortLabel: 'AUS',
+    unitLabel: 'state or territory',
+    viewBox: australiaMap.viewBox,
+  },
+  {
+    acceptsAbbreviations: false,
+    answerNoun: 'code word',
+    areas: NATO_PHONETIC_ALPHABET,
+    eyebrow: 'NATO phonetic alphabet',
+    flag: '',
+    id: 'nato',
+    label: 'NATO phonetic alphabet',
+    mapLabel: 'NATO phonetic alphabet trainer',
+    pluralNoun: 'code words',
+    projection: 'cards',
+    shortLabel: 'NATO',
+    unitLabel: 'letter',
+    viewBox: '',
+  },
+]
+
+export const QUIZ_REGIONS = Object.fromEntries(REGIONS_LIST.map((region) => [region.id, region])) as Record<
+  RegionId,
+  QuizRegion
+>
+
+export const REGION_OPTIONS = REGIONS_LIST.map(({ flag, id, label, shortLabel }) => ({ flag, id, label, shortLabel }))
+
+const answerMapsByRegion = new Map(
+  REGIONS_LIST.map((region) => [
+      region.id,
+      new Map(
+      region.areas.flatMap((area) => [
+        [normalizeAnswer(area.name), area],
+        ...(area.aliases ?? []).map((alias) => [normalizeAnswer(alias), area] as const),
+        ...(region.acceptsAbbreviations ? [[normalizeAnswer(area.abbreviation), area] as const] : []),
+      ]),
+    ),
   ]),
 )
 
-const stateNamesByAnswer = US_STATES.map((state) => ({
-  normalizedName: normalizeAnswer(state.name),
-  state,
-}))
+const areaNamesByRegion = new Map(
+  REGIONS_LIST.map((region) => [
+    region.id,
+    region.areas.map((area) => ({
+      area,
+      normalizedName: normalizeAnswer(area.name),
+    })),
+  ]),
+)
 
-export function findStateByAnswer(answer: string) {
+export function findAreaByAnswer(region: QuizRegion, answer: string) {
   const normalizedAnswer = normalizeAnswer(answer.trim())
-  const exactMatch = stateByAnswer.get(normalizedAnswer)
+  const exactMatch = answerMapsByRegion.get(region.id)?.get(normalizedAnswer)
 
   if (exactMatch) {
     return exactMatch
@@ -190,10 +397,10 @@ export function findStateByAnswer(answer: string) {
     return undefined
   }
 
-  const matches = stateNamesByAnswer
-    .map(({ normalizedName, state }) => ({
+  const matches = (areaNamesByRegion.get(region.id) ?? [])
+    .map(({ area, normalizedName }) => ({
+      area,
       distance: getEditDistance(normalizedAnswer, normalizedName),
-      state,
     }))
     .filter((match) => match.distance <= allowedMisspellings)
     .sort((a, b) => a.distance - b.distance)
@@ -202,5 +409,5 @@ export function findStateByAnswer(answer: string) {
     return undefined
   }
 
-  return matches[0].state
+  return matches[0].area
 }

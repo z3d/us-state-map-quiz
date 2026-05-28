@@ -1,5 +1,5 @@
 {
-  "name": "us-state-map-quiz",
+  "name": "memory-quiz",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@svg-maps/australia": "^2.0.0",
     "d3-geo": "^3.1.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
