@@ -1104,12 +1104,14 @@ const answerMapsByRegion = new Map(
     return [
       region.id,
       new Map(
-        region.areas.flatMap((area) => [
-          [normalizeAnswer(area.name), area],
-          ...(area.aliases ?? []).map((alias) => [normalizeAnswer(alias), area] as const),
-          ...(shortNameAliases.get(area.id) ?? []).map((alias) => [alias, area] as const),
-          ...(region.acceptsAbbreviations ? [[normalizeAnswer(area.abbreviation), area] as const] : []),
-        ]),
+        [
+          ...region.areas.flatMap((area) => (shortNameAliases.get(area.id) ?? []).map((alias) => [alias, area] as const)),
+          ...region.areas.flatMap((area) => [
+            [normalizeAnswer(area.name), area] as const,
+            ...(area.aliases ?? []).map((alias) => [normalizeAnswer(alias), area] as const),
+            ...(region.acceptsAbbreviations ? [[normalizeAnswer(area.abbreviation), area] as const] : []),
+          ]),
+        ],
       ),
     ] as const
   }),
