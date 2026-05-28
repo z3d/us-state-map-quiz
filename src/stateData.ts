@@ -200,6 +200,8 @@ type SvgPathBounds = {
 }
 
 const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
+const MIN_VISIBLE_WORLD_AREA_SIZE = 6
+const MAX_WORLD_AREA_SCALE = 140
 
 function isSvgPathCommand(token: string) {
   return /^[a-df-zA-DF-Z]$/.test(token)
@@ -327,6 +329,94 @@ function getSvgViewBox(areas: QuizArea[], fallbackViewBox: string) {
   return [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].map(formatSvgNumber).join(' ')
 }
 
+function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
+  const tokens = path.match(SVG_PATH_TOKEN_PATTERN) ?? []
+  const centerX = (bounds.minX + bounds.maxX) / 2
+  const centerY = (bounds.minY + bounds.maxY) / 2
+  const output: string[] = []
+  let command = ''
+  let currentX = 0
+  let currentY = 0
+  let index = 0
+  let startX = 0
+  let startY = 0
+
+  function scalePoint(x: number, y: number) {
+    return {
+      x: centerX + (x - centerX) * scale,
+      y: centerY + (y - centerY) * scale,
+    }
+  }
+
+  while (index < tokens.length) {
+    const token = tokens[index]
+
+    if (isSvgPathCommand(token)) {
+      command = token
+      index += 1
+
+      if (command === 'z' || command === 'Z') {
+        output.push('Z')
+        currentX = startX
+        currentY = startY
+      }
+
+      continue
+    }
+
+    if (command !== 'm' && command !== 'M') {
+      return path
+    }
+
+    let isMove = true
+
+    while (index + 1 < tokens.length && !isSvgPathCommand(tokens[index])) {
+      const nextX = Number(tokens[index])
+      const nextY = Number(tokens[index + 1])
+      index += 2
+
+      if (Number.isNaN(nextX) || Number.isNaN(nextY)) {
+        continue
+      }
+
+      if (command === 'm') {
+        currentX += nextX
+        currentY += nextY
+      } else {
+        currentX = nextX
+        currentY = nextY
+      }
+
+      const scaledPoint = scalePoint(currentX, currentY)
+
+      if (isMove) {
+        startX = currentX
+        startY = currentY
+        output.push(`M${formatSvgNumber(scaledPoint.x)},${formatSvgNumber(scaledPoint.y)}`)
+        isMove = false
+      } else {
+        output.push(`L${formatSvgNumber(scaledPoint.x)},${formatSvgNumber(scaledPoint.y)}`)
+      }
+    }
+  }
+
+  return output.join(' ')
+}
+
+function getWorldPathScale(bounds: SvgPathBounds | undefined) {
+  if (!bounds) {
+    return 1
+  }
+
+  const maxDimension = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+
+  if (maxDimension >= MIN_VISIBLE_WORLD_AREA_SIZE || maxDimension <= 0) {
+    return 1
+  }
+
+  return Math.min(MAX_WORLD_AREA_SCALE, MIN_VISIBLE_WORLD_AREA_SIZE / maxDimension)
+}
+
 const AUSTRALIA_LOCATIONS = australiaMap.locations as SvgMapLocation[]
 const australiaLocationById = new Map(AUSTRALIA_LOCATIONS.map((location) => [location.id, location]))
 
@@ -432,8 +522,12 @@ const COUNTRY_ALIASES: Partial<Record<string, string[]>> = {
   ae: ['UAE'],
   bn: ['Brunei Darussalam'],
   bq: ['Bonaire, Saint Eustatius and Saba', 'Bonaire, Sint Eustatius and Saba'],
+  cd: ['DRC', 'Congo Kinshasa', 'Congo-Kinshasa'],
+  cf: ['CAR'],
   ci: ["Cote d'Ivoire", 'Cote d Ivoire'],
+  cg: ['Congo Brazzaville', 'Congo-Brazzaville'],
   cv: ['Cabo Verde'],
+  do: ['DR'],
   cz: ['Czech Republic'],
   gb: ['UK', 'Britain', 'Great Britain'],
   la: ["Lao People's Democratic Republic"],
@@ -703,6 +797,7 @@ function createWorldAreas(locationIds: string[]) {
 
       const abbreviation = id.toUpperCase()
       const bounds = getSvgPathBounds(location.path)
+      const pathScale = getWorldPathScale(bounds)
       const name = COUNTRY_NAME_OVERRIDES[id] ?? location.name
       const originalNameAliases = name === location.name ? [] : [location.name]
 
@@ -714,7 +809,7 @@ function createWorldAreas(locationIds: string[]) {
         labelX: bounds ? (bounds.minX + bounds.maxX) / 2 : undefined,
         labelY: bounds ? (bounds.minY + bounds.maxY) / 2 : undefined,
         name,
-        path: location.path,
+        path: bounds && pathScale > 1 ? scaleSvgPath(location.path, bounds, pathScale) : location.path,
       }
     })
     .filter((area): area is QuizArea => Boolean(area))
