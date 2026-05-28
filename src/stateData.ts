@@ -213,12 +213,14 @@ export type SvgPathBounds = {
 const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
 const MIN_VISIBLE_WORLD_AREA_SIZE = 14
 const MAX_WORLD_AREA_SCALE = 420
-const MIN_VISIBLE_AFRICA_ISLAND_SIZE = 30
-const MIN_AFRICA_ISLAND_SCALE = 2.4
+const MIN_VISIBLE_AFRICA_ISLAND_SIZE = 16
+const MIN_AFRICA_ISLAND_SCALE = 1
 
 type WorldPathScaleRule = {
   minScale?: number
   minVisibleSize?: number
+  offsetX?: number
+  offsetY?: number
 }
 
 function isSvgPathCommand(token: string) {
@@ -347,10 +349,12 @@ function getSvgViewBox(areas: QuizArea[], fallbackViewBox: string) {
   return [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].map(formatSvgNumber).join(' ')
 }
 
-export function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number) {
+export function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number, offset: { x?: number; y?: number } = {}) {
   const tokens = path.match(SVG_PATH_TOKEN_PATTERN) ?? []
   const centerX = (bounds.minX + bounds.maxX) / 2
   const centerY = (bounds.minY + bounds.maxY) / 2
+  const offsetX = offset.x ?? 0
+  const offsetY = offset.y ?? 0
   const output: string[] = []
   let command = ''
   let currentX = 0
@@ -361,8 +365,8 @@ export function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number)
 
   function scalePoint(x: number, y: number) {
     return {
-      x: centerX + (x - centerX) * scale,
-      y: centerY + (y - centerY) * scale,
+      x: centerX + (x - centerX) * scale + offsetX,
+      y: centerY + (y - centerY) * scale + offsetY,
     }
   }
 
@@ -737,6 +741,26 @@ const AFRICA_SMALL_ISLAND_PATH_SCALE_RULES: Partial<Record<string, WorldPathScal
     },
   ]),
 )
+AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.km = {
+  ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.km,
+  offsetX: -5,
+  offsetY: -4,
+}
+AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.mu = {
+  ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.mu,
+  offsetX: 10,
+  offsetY: -5,
+}
+AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.re = {
+  ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.re,
+  offsetX: -8,
+  offsetY: 7,
+}
+AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.yt = {
+  ...AFRICA_SMALL_ISLAND_PATH_SCALE_RULES.yt,
+  offsetX: 10,
+  offsetY: 7,
+}
 
 const NORTH_AMERICA_COUNTRY_IDS = [
   'bs',
@@ -883,7 +907,10 @@ function createWorldAreas(
 
       const abbreviation = id.toUpperCase()
       const bounds = getSvgPathBounds(location.path)
-      const pathScale = getWorldPathScale(bounds, options.pathScaleRules?.[id])
+      const pathScaleRule = options.pathScaleRules?.[id]
+      const pathScale = getWorldPathScale(bounds, pathScaleRule)
+      const pathOffsetX = pathScaleRule?.offsetX ?? 0
+      const pathOffsetY = pathScaleRule?.offsetY ?? 0
       const name = COUNTRY_NAME_OVERRIDES[id] ?? location.name
       const originalNameAliases = name === location.name ? [] : [location.name]
       const aliases = [...originalNameAliases, ...(COUNTRY_ALIASES[id] ?? [])]
@@ -895,13 +922,13 @@ function createWorldAreas(
         feature: areaFeature,
         id,
         labelFontSize: getCountryLabelFontSize(bounds, abbreviation),
-        labelX: bounds ? (bounds.minX + bounds.maxX) / 2 : undefined,
-        labelY: bounds ? (bounds.minY + bounds.maxY) / 2 : undefined,
+        labelX: bounds ? (bounds.minX + bounds.maxX) / 2 + pathOffsetX : undefined,
+        labelY: bounds ? (bounds.minY + bounds.maxY) / 2 + pathOffsetY : undefined,
         name,
         path: options.useProjectedFeatures
           ? undefined
-          : bounds && pathScale > 1
-            ? scaleSvgPath(location.path, bounds, pathScale)
+          : bounds && (pathScale !== 1 || pathOffsetX !== 0 || pathOffsetY !== 0)
+            ? scaleSvgPath(location.path, bounds, pathScale, { x: pathOffsetX, y: pathOffsetY })
             : location.path,
       }
     })
