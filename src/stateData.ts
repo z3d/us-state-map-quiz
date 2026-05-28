@@ -213,6 +213,13 @@ export type SvgPathBounds = {
 const SVG_PATH_TOKEN_PATTERN = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g
 const MIN_VISIBLE_WORLD_AREA_SIZE = 14
 const MAX_WORLD_AREA_SCALE = 420
+const MIN_VISIBLE_AFRICA_ISLAND_SIZE = 30
+const MIN_AFRICA_ISLAND_SCALE = 2.4
+
+type WorldPathScaleRule = {
+  minScale?: number
+  minVisibleSize?: number
+}
 
 function isSvgPathCommand(token: string) {
   return /^[a-df-zA-DF-Z]$/.test(token)
@@ -257,12 +264,12 @@ function getSvgPathBounds(path: string) {
       continue
     }
 
-    if (command !== 'm' && command !== 'M') {
+    if (command !== 'l' && command !== 'L' && command !== 'm' && command !== 'M') {
       index += 1
       continue
     }
 
-    let isMove = true
+    let isMove = command === 'm' || command === 'M'
 
     while (index + 1 < tokens.length && !isSvgPathCommand(tokens[index])) {
       const nextX = Number(tokens[index])
@@ -273,7 +280,7 @@ function getSvgPathBounds(path: string) {
         continue
       }
 
-      if (command === 'm') {
+      if (command === 'l' || command === 'm') {
         currentX += nextX
         currentY += nextY
       } else {
@@ -414,18 +421,22 @@ export function scaleSvgPath(path: string, bounds: SvgPathBounds, scale: number)
   return output.join(' ')
 }
 
-function getWorldPathScale(bounds: SvgPathBounds | undefined) {
+function getWorldPathScale(bounds: SvgPathBounds | undefined, rule: WorldPathScaleRule = {}) {
   if (!bounds) {
     return 1
   }
 
   const maxDimension = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
 
-  if (maxDimension >= MIN_VISIBLE_WORLD_AREA_SIZE || maxDimension <= 0) {
+  if (maxDimension <= 0) {
     return 1
   }
 
-  return Math.min(MAX_WORLD_AREA_SCALE, MIN_VISIBLE_WORLD_AREA_SIZE / maxDimension)
+  const minScale = rule.minScale ?? 1
+  const minVisibleSize = rule.minVisibleSize ?? MIN_VISIBLE_WORLD_AREA_SIZE
+  const visibleScale = maxDimension < minVisibleSize ? minVisibleSize / maxDimension : 1
+
+  return Math.min(MAX_WORLD_AREA_SCALE, Math.max(minScale, visibleScale))
 }
 
 const AUSTRALIA_LOCATIONS = australiaMap.locations as SvgMapLocation[]
@@ -716,48 +727,36 @@ const AFRICA_COUNTRY_IDS = [
   'zw',
 ]
 
+const AFRICA_SMALL_ISLAND_IDS = ['cv', 'km', 'mu', 're', 'sc', 'sh', 'st', 'yt'] as const
+const AFRICA_SMALL_ISLAND_PATH_SCALE_RULES: Partial<Record<string, WorldPathScaleRule>> = Object.fromEntries(
+  AFRICA_SMALL_ISLAND_IDS.map((id) => [
+    id,
+    {
+      minScale: MIN_AFRICA_ISLAND_SCALE,
+      minVisibleSize: MIN_VISIBLE_AFRICA_ISLAND_SIZE,
+    },
+  ]),
+)
+
 const NORTH_AMERICA_COUNTRY_IDS = [
-  'ag',
-  'ai',
-  'aw',
-  'bb',
-  'bl',
-  'bm',
-  'bq',
   'bs',
   'bz',
   'ca',
   'cr',
   'cu',
-  'cw',
-  'dm',
   'do',
-  'gd',
   'gl',
-  'gp',
   'gt',
   'hn',
   'ht',
   'jm',
-  'kn',
-  'ky',
-  'lc',
-  'mf',
-  'mq',
-  'ms',
   'mx',
   'ni',
   'pa',
-  'pm',
   'pr',
   'sv',
-  'sx',
-  'tc',
   'tt',
   'us',
-  'vc',
-  'vg',
-  'vi',
 ]
 
 const SOUTH_AMERICA_COUNTRY_IDS = [
@@ -870,7 +869,10 @@ function getWorldFeature(id: string, names: string[]) {
   return pointCoordinates ? createPointFeature(names[0] ?? id.toUpperCase(), pointCoordinates) : undefined
 }
 
-function createWorldAreas(locationIds: string[], options: { useProjectedFeatures?: boolean } = {}) {
+function createWorldAreas(
+  locationIds: string[],
+  options: { pathScaleRules?: Partial<Record<string, WorldPathScaleRule>>; useProjectedFeatures?: boolean } = {},
+) {
   return locationIds
     .map<QuizArea | undefined>((id) => {
       const location = worldLocationById.get(id)
@@ -881,7 +883,7 @@ function createWorldAreas(locationIds: string[], options: { useProjectedFeatures
 
       const abbreviation = id.toUpperCase()
       const bounds = getSvgPathBounds(location.path)
-      const pathScale = getWorldPathScale(bounds)
+      const pathScale = getWorldPathScale(bounds, options.pathScaleRules?.[id])
       const name = COUNTRY_NAME_OVERRIDES[id] ?? location.name
       const originalNameAliases = name === location.name ? [] : [location.name]
       const aliases = [...originalNameAliases, ...(COUNTRY_ALIASES[id] ?? [])]
@@ -907,7 +909,9 @@ function createWorldAreas(locationIds: string[], options: { useProjectedFeatures
 }
 
 const ASIA_COUNTRIES = createWorldAreas(ASIA_COUNTRY_IDS, { useProjectedFeatures: true })
-const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS)
+const AFRICA_COUNTRIES = createWorldAreas(AFRICA_COUNTRY_IDS, {
+  pathScaleRules: AFRICA_SMALL_ISLAND_PATH_SCALE_RULES,
+})
 const NORTH_AMERICA_COUNTRIES = createWorldAreas(NORTH_AMERICA_COUNTRY_IDS, { useProjectedFeatures: true })
 const SOUTH_AMERICA_COUNTRIES = createWorldAreas(SOUTH_AMERICA_COUNTRY_IDS)
 const EUROPE_COUNTRIES = createWorldAreas(EUROPE_COUNTRY_IDS, { useProjectedFeatures: true })
