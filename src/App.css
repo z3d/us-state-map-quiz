@@ -503,8 +503,6 @@ button svg {
 }
 
 .result-modal {
-  position: relative;
-  z-index: 2;
   width: min(100%, 430px);
   display: grid;
   gap: 16px;
@@ -619,46 +617,8 @@ button svg {
   }
 }
 
-/* #3 — completion confetti */
-.confetti {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.confetti-piece {
-  position: absolute;
-  top: -16px;
-  border-radius: 1px;
-  opacity: 0;
-  will-change: transform, opacity;
-  animation-name: confetti-fall;
-  animation-timing-function: cubic-bezier(0.25, 0.55, 0.55, 1);
-  animation-iteration-count: 1;
-  animation-fill-mode: both;
-}
-
-@keyframes confetti-fall {
-  0% {
-    transform: translate3d(0, -10px, 0) rotate(0deg);
-    opacity: 0;
-  }
-
-  8% {
-    opacity: 1;
-  }
-
-  100% {
-    transform: translate3d(var(--drift), 92vh, 0) rotate(var(--spin));
-    opacity: 0.9;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .state-shape,
-  .confetti-piece {
+  .state-shape {
     animation: none !important;
   }
 }

@@ -44,47 +44,6 @@ function writeHashSelection(regionId: RegionId, mode: QuizMode) {
   }
 }
 
-const CONFETTI_COLORS = ['#2b6fe5', '#ffcf53', '#70c69b', '#f07167', '#9b5de5', '#27784d']
-const CONFETTI_COUNT = 80
-
-// Pure, deterministic pseudo-random in [0, 1) — keeps render idempotent
-// (react-hooks/purity) while still scattering the confetti convincingly.
-function pseudoRandom(seed: number) {
-  const x = Math.sin(seed) * 10000
-  return x - Math.floor(x)
-}
-
-function Confetti() {
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: CONFETTI_COUNT }, (_, i) => {
-        const n = i + 1
-        const size = 6 + pseudoRandom(n * 12.9898) * 7
-        const style = {
-          left: `${pseudoRandom(n * 78.233) * 100}%`,
-          width: `${size}px`,
-          height: `${Math.max(4, size * 0.42)}px`,
-          background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-          animationDelay: `${pseudoRandom(n * 4.193) * 0.5}s`,
-          animationDuration: `${2.4 + pseudoRandom(n * 9.71) * 1.6}s`,
-          '--drift': `${(pseudoRandom(n * 31.7) - 0.5) * 160}px`,
-          '--spin': `${pseudoRandom(n * 53.3) * 720 + 360}deg`,
-        } as unknown as React.CSSProperties
-
-        return { id: i, style }
-      }),
-    [],
-  )
-
-  return (
-    <div className="confetti" aria-hidden="true">
-      {pieces.map((piece) => (
-        <span className="confetti-piece" key={piece.id} style={piece.style} />
-      ))}
-    </div>
-  )
-}
-
 type AreaShape = {
   abbreviation: string
   d: string
@@ -854,7 +813,6 @@ function App() {
 
       {isResultModalOpen ? (
         <div className="result-backdrop" role="presentation">
-          <Confetti />
           <section
             aria-describedby="result-message"
             aria-labelledby="result-title"
