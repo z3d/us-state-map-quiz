@@ -698,7 +698,6 @@ function App() {
                     aria-label={shape.name}
                     className={stateClassName}
                     d={shape.d}
-                    pathLength={1}
                     onBlur={() => setHoveredStateId(null)}
                     onClick={() => setHoveredStateId(shape.id)}
                     onFocus={() => setHoveredStateId(shape.id)}
