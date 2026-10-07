@@ -26,6 +26,24 @@ const MAX_PROJECTED_AREA_SCALE = 640
 const MAP_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id !== 'nato')
 const MEMORY_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id === 'nato')
 
+const LIST_MODE_HASH = 'list'
+
+// Bookmarkable quiz URLs: #south-america opens Name mode, #south-america/list opens List mode.
+function readHashSelection(): { mode: QuizMode; regionId: RegionId } {
+  const [regionPart = '', modePart = ''] = window.location.hash.replace(/^#\/?/, '').toLowerCase().split('/')
+  const regionId = Object.hasOwn(QUIZ_REGIONS, regionPart) ? (regionPart as RegionId) : 'us'
+
+  return { mode: modePart === LIST_MODE_HASH ? 'fill' : 'guess', regionId }
+}
+
+function writeHashSelection(regionId: RegionId, mode: QuizMode) {
+  const hash = `#${regionId}${mode === 'fill' ? `/${LIST_MODE_HASH}` : ''}`
+
+  if (window.location.hash !== hash) {
+    window.history.replaceState(null, '', hash)
+  }
+}
+
 const CONFETTI_COLORS = ['#2b6fe5', '#ffcf53', '#70c69b', '#f07167', '#9b5de5', '#27784d']
 const CONFETTI_COUNT = 80
 
@@ -244,13 +262,14 @@ function App() {
   const fillInputRef = useRef<HTMLInputElement>(null)
   const guessInputRef = useRef<HTMLInputElement>(null)
   const lastPointerSubmitAtRef = useRef(0)
-  const [regionId, setRegionId] = useState<RegionId>('us')
+  const [initialSelection] = useState(readHashSelection)
+  const [regionId, setRegionId] = useState<RegionId>(initialSelection.regionId)
   const region = QUIZ_REGIONS[regionId]
   const areaById = useMemo(() => new Map(region.areas.map((area) => [area.id, area])), [region])
   const areaCount = region.areas.length
   const areaShapes = useMemo(() => buildAreaShapes(region), [region])
-  const [mode, setMode] = useState<QuizMode>('guess')
-  const [targetId, setTargetId] = useState(() => chooseRandomAreaId(QUIZ_REGIONS.us.areas))
+  const [mode, setMode] = useState<QuizMode>(initialSelection.mode)
+  const [targetId, setTargetId] = useState(() => chooseRandomAreaId(QUIZ_REGIONS[initialSelection.regionId].areas))
   const [guessInput, setGuessInput] = useState('')
   const [guessStatus, setGuessStatus] = useState<AnswerStatus>('idle')
   const [guessMessage, setGuessMessage] = useState('Ready')
@@ -286,6 +305,28 @@ function App() {
   const hoveredAreaName = hoveredStateId ? areaById.get(hoveredStateId)?.name : undefined
   const resultKicker = mode === 'guess' ? 'Final score' : isCardRegion ? 'List complete' : 'Map complete'
   const reviewButtonLabel = isCardRegion ? 'Review List' : 'Show Map'
+
+  useEffect(() => {
+    writeHashSelection(regionId, mode)
+  }, [mode, regionId])
+
+  useEffect(() => {
+    function applyHashSelection() {
+      const next = readHashSelection()
+
+      if (next.regionId === regionId && next.mode === mode) {
+        return
+      }
+
+      setRegionId(next.regionId)
+      setMode(next.mode)
+      resetGame(next.mode, QUIZ_REGIONS[next.regionId])
+    }
+
+    window.addEventListener('hashchange', applyHashSelection)
+
+    return () => window.removeEventListener('hashchange', applyHashSelection)
+  })
 
   useEffect(() => {
     if (isCurrentModeComplete) {

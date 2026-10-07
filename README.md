@@ -9,6 +9,10 @@ Live site: https://memoryquiz.pages.dev/
 - Name: a random map area or alphabet letter is highlighted and the typed answer turns green or red.
 - List: start with a blank map or list, type names, and correct answers fill in.
 
+## Bookmarks
+
+The URL hash selects the quiz, so links can be bookmarked: `#us`, `#australia`, `#asia`, `#africa`, `#north-america`, `#south-america`, `#europe`, `#nato`. Add `/list` for List mode, e.g. `https://memoryquiz.pages.dev/#south-america/list`.
+
 ## Map Data
 
 - US state geometry comes from `us-atlas`.

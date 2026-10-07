@@ -739,7 +739,6 @@ const SOUTH_AMERICA_COUNTRY_IDS = [
   'ec',
   'fk',
   'gf',
-  'gs',
   'gy',
   'pe',
   'py',
