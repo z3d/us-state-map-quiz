@@ -380,6 +380,12 @@ button svg {
   cursor: help;
 }
 
+/* Focused areas get the .hovered style instead of the browser's rectangular focus box. */
+.state-shape:focus,
+.memory-card:focus {
+  outline: none;
+}
+
 .quiz-map.reviewing .state-shape.hovered {
   stroke: #172033;
   stroke-width: 1.8;
