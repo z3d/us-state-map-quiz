@@ -643,7 +643,11 @@ button svg {
 
 @media (max-width: 900px) {
   .app-shell {
-    /* --viewport-height tracks the visual viewport so the layout shrinks above the keyboard. */
+    /* Pinned to the visual viewport: --viewport-height tracks the keyboard, and fixed
+       positioning stops iOS Safari from scrolling the page to reveal the focused input. */
+    position: fixed;
+    inset: 0;
+    width: 100%;
     height: var(--viewport-height, 100svh);
   }
 
@@ -816,14 +820,16 @@ button svg {
     height: 13px;
   }
 
-  /* Map on top, answer bar docked at the bottom. */
+  /* Answer bar directly under the header, map below it. Keeping the input near the top
+     means the on-screen keyboard never covers it, so iOS has no reason to scroll the page. */
   .game-layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .map-stage {
-    padding: 8px;
+    grid-row: 2;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
     background-size: 32px 32px;
   }
 
@@ -876,14 +882,15 @@ button svg {
   }
 
   .quiz-panel {
+    grid-row: 1;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 8px;
     row-gap: 6px;
     max-height: none;
     overflow: visible;
-    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
     border-left: 0;
   }
 
@@ -1050,15 +1057,19 @@ button svg {
   }
 
   .map-stage {
+    grid-row: 1;
+    grid-column: 1;
     padding: 6px;
   }
 
   .quiz-panel {
+    grid-row: 1;
+    grid-column: 2;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     overflow: auto;
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    border-top: 0;
+    border-bottom: 0;
     border-left: 1px solid var(--line);
   }
 
