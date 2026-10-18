@@ -1,4 +1,4 @@
-import { CheckCircle2, Eye, Keyboard, MapPinned, RotateCcw, Timer, Trophy } from 'lucide-react'
+import { CheckCircle2, Eye, Keyboard, MapPinned, Maximize2, Minimize2, RotateCcw, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { geoAlbersUsa, geoConicConformal, geoConicEqualArea, geoPath } from 'd3-geo'
 import type { FeatureCollection, GeometryObject } from 'geojson'
@@ -27,6 +27,21 @@ const MAP_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id !== 'nato
 const MEMORY_REGION_OPTIONS = REGION_OPTIONS.filter((option) => option.id === 'nato')
 
 const LIST_MODE_HASH = 'list'
+
+// Fullscreen is the only way to drop the browser bar in a normal tab; iPhone Safari has no
+// such API, and a home-screen (standalone) launch has no bar to hide, so skip the button there.
+function canOfferFullscreen() {
+  if (typeof document === 'undefined' || !document.fullscreenEnabled) {
+    return false
+  }
+
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+
+  return !standalone
+}
 
 // Bookmarkable quiz URLs: #south-america opens Name mode, #south-america/list opens List mode.
 function readHashSelection(): { mode: QuizMode; regionId: RegionId } {
@@ -243,6 +258,8 @@ function App() {
   const [hoveredStateId, setHoveredStateId] = useState<string | null>(null)
   const [isReviewingMap, setIsReviewingMap] = useState(false)
   const [isResultModalOpen, setIsResultModalOpen] = useState(false)
+  const [offerFullscreen, setOfferFullscreen] = useState(canOfferFullscreen)
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement))
 
   const targetArea = areaById.get(targetId) ?? region.areas[0]
   const guessResultValues = Object.values(guessResultsById)
@@ -304,6 +321,30 @@ function App() {
       root.style.removeProperty('--viewport-height')
     }
   }, [])
+
+  useEffect(() => {
+    if (!offerFullscreen) {
+      return
+    }
+
+    function syncFullscreen() {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+
+    document.addEventListener('fullscreenchange', syncFullscreen)
+
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen)
+  }, [offerFullscreen])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+      return
+    }
+
+    // Browsers that refuse (embedded views, policy-blocked windows) reject; drop the button rather than leave it dead.
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => setOfferFullscreen(false))
+  }
 
   // The small-screen region chips scroll horizontally; keep the active chip visible.
   useEffect(() => {
@@ -615,6 +656,18 @@ function App() {
               List
             </button>
           </div>
+          {offerFullscreen ? (
+            <button
+              aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
+              aria-pressed={isFullscreen}
+              className="fullscreen-button"
+              title={isFullscreen ? 'Exit full screen' : 'Full screen'}
+              type="button"
+              onClick={toggleFullscreen}
+            >
+              {isFullscreen ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+            </button>
+          ) : null}
         </div>
       </header>
 

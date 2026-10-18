@@ -626,6 +626,11 @@ button svg {
   }
 }
 
+/* Fullscreen toggle only exists for small screens; desktop keeps its header as is. */
+.fullscreen-button {
+  display: none;
+}
+
 /* ---------- Small screens (phones, portrait tablets) ---------- */
 /* Everything below only applies at or under 900px; desktop rules above are untouched. */
 
@@ -683,6 +688,22 @@ button svg {
   .topbar-controls {
     grid-area: mode;
     width: auto;
+    gap: 6px;
+  }
+
+  .fullscreen-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    flex: 0 0 auto;
+  }
+
+  .fullscreen-button svg {
+    width: 18px;
+    height: 18px;
   }
 
   .mode-switch {
