@@ -221,6 +221,8 @@ function App() {
   const fillInputRef = useRef<HTMLInputElement>(null)
   const guessInputRef = useRef<HTMLInputElement>(null)
   const lastPointerSubmitAtRef = useRef(0)
+  const foundListRef = useRef<HTMLDivElement>(null)
+  const trainingSwitchRef = useRef<HTMLDivElement>(null)
   const [initialSelection] = useState(readHashSelection)
   const [regionId, setRegionId] = useState<RegionId>(initialSelection.regionId)
   const region = QUIZ_REGIONS[regionId]
@@ -268,6 +270,72 @@ function App() {
   useEffect(() => {
     writeHashSelection(regionId, mode)
   }, [mode, regionId])
+
+  // On phones the on-screen keyboard shrinks the visual viewport but not the layout viewport.
+  // Publish the visible height so the small-screen layout can fit the map above the keyboard.
+  useEffect(() => {
+    const viewport = window.visualViewport
+
+    if (!viewport) {
+      return
+    }
+
+    const root = document.documentElement
+
+    function syncViewportHeight() {
+      if (!viewport) {
+        return
+      }
+
+      root.style.setProperty('--viewport-height', `${Math.round(viewport.height)}px`)
+
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0)
+      }
+    }
+
+    syncViewportHeight()
+    viewport.addEventListener('resize', syncViewportHeight)
+    viewport.addEventListener('scroll', syncViewportHeight)
+
+    return () => {
+      viewport.removeEventListener('resize', syncViewportHeight)
+      viewport.removeEventListener('scroll', syncViewportHeight)
+      root.style.removeProperty('--viewport-height')
+    }
+  }, [])
+
+  // The small-screen region chips scroll horizontally; keep the active chip visible.
+  useEffect(() => {
+    const bar = trainingSwitchRef.current
+    const active = bar?.querySelector<HTMLElement>('.region-switch button.active')
+
+    if (!bar || !active || bar.scrollWidth <= bar.clientWidth) {
+      return
+    }
+
+    const barRect = bar.getBoundingClientRect()
+    const activeRect = active.getBoundingClientRect()
+    const activeLeft = activeRect.left - barRect.left + bar.scrollLeft
+    const padding = 12
+
+    if (activeLeft < bar.scrollLeft + padding) {
+      bar.scrollLeft = activeLeft - padding
+    } else if (activeLeft + activeRect.width > bar.scrollLeft + bar.clientWidth - padding) {
+      bar.scrollLeft = activeLeft + activeRect.width - bar.clientWidth + padding
+    }
+  }, [regionId])
+
+  // The small-screen found list is a single scrolling row; keep the newest entry in view.
+  useEffect(() => {
+    const list = foundListRef.current
+
+    if (!list || list.scrollWidth <= list.clientWidth) {
+      return
+    }
+
+    list.scrollLeft = list.scrollWidth
+  }, [filledStateIds.length])
 
   useEffect(() => {
     function applyHashSelection() {
@@ -492,7 +560,7 @@ function App() {
             <h1>Memory Quiz</h1>
           </div>
 
-          <div className="training-switch" aria-label="Training set">
+          <div className="training-switch" aria-label="Training set" ref={trainingSwitchRef}>
             <div className="training-group">
               <span className="training-group-label">Maps</span>
               <div className="region-switch">
@@ -709,9 +777,12 @@ function App() {
                   {answerLabel}
                 </label>
                 <input
+                  autoCapitalize="words"
                   autoComplete="off"
+                  autoCorrect="off"
                   autoFocus
                   className={guessStatus}
+                  enterKeyHint="go"
                   disabled={isGuessComplete}
                   id="guess-input"
                   onKeyDown={submitOnEnter}
@@ -721,6 +792,7 @@ function App() {
                   }}
                   placeholder="Name"
                   ref={guessInputRef}
+                  spellCheck={false}
                   value={guessInput}
                 />
                 <button
@@ -754,9 +826,12 @@ function App() {
                   {answerLabel}
                 </label>
                 <input
+                  autoCapitalize="words"
                   autoComplete="off"
+                  autoCorrect="off"
                   autoFocus
                   className={fillStatus}
+                  enterKeyHint="go"
                   disabled={isFillComplete}
                   id="fill-input"
                   onKeyDown={submitOnEnter}
@@ -766,6 +841,7 @@ function App() {
                   }}
                   placeholder="Name"
                   ref={fillInputRef}
+                  spellCheck={false}
                   value={fillInput}
                 />
                 <button
@@ -780,7 +856,7 @@ function App() {
 
               <p className={`feedback ${fillStatus}`}>{fillMessage}</p>
 
-              <div className="found-list" aria-label={`Filled ${region.pluralNoun}`}>
+              <div className="found-list" aria-label={`Filled ${region.pluralNoun}`} ref={foundListRef}>
                 {filledStateIds.length === 0 ? (
                   <p className="found-empty">Found {region.pluralNoun} will appear here.</p>
                 ) : (
